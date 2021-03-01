@@ -445,6 +445,21 @@ pub trait CryptoHash {
     fn hash(&self) -> HashValue;
 }
 
+/// A type that can be cryptographically hashed to produce a `HashValue`.
+///
+/// In most cases, this trait should not be implemented manually but rather derived using
+/// the macros `serde::Serialize`, `CryptoHasher`, and `BCSCryptoHash`.
+pub trait CryptoHash1 {
+    /// the seed used to initialize hashing `Self` before the serialization bytes of the actual value
+    fn seed() -> &'static [u8; 32];
+
+    /// Return a new hasher pre-seeded by this type's seed
+    fn seeded_hasher() -> DefaultHasher;
+
+    /// Hashes the object and produces a `HashValue`.
+    fn hash(&self) -> HashValue;
+}
+
 /// A trait for representing the state of a cryptographic hasher.
 pub trait CryptoHasher: Default + std::io::Write {
     /// the seed used to initialize hashing `Self` before the serialization bytes of the actual value

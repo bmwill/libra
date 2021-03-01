@@ -436,6 +436,56 @@ pub fn bcs_crypto_hash_dispatch(input: TokenStream) -> TokenStream {
     out.into()
 }
 
+#[proc_macro_derive(CryptoHash)]
+pub fn crypto_hash_dispatch(input: TokenStream) -> TokenStream {
+    let ast = parse_macro_input!(input as DeriveInput);
+    let type_name = &ast.ident;
+    let error_msg = syn::LitStr::new(
+        &format!(
+            "BCS serialization of {} should not fail",
+            type_name.to_string()
+        ),
+        Span::call_site(),
+    );
+    let param = if ast.generics.params.is_empty() {
+        quote!()
+    } else {
+        let args = proc_macro2::TokenStream::from_iter(
+            std::iter::repeat(quote!(())).take(ast.generics.params.len()),
+        );
+        quote!(<#args>)
+    };
+    let generics = add_trait_bounds(ast.generics);
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+    let out = quote!(
+        impl #impl_generics diem_crypto::hash::CryptoHash1 for #type_name #ty_generics #where_clause {
+            /// the seed used to initialize hashing `Self` before the serialization bytes of the actual value
+            fn seed() -> &'static [u8; 32] {
+                static SEED: diem_crypto::_once_cell::sync::OnceCell<[u8; 32]> = diem_crypto::_once_cell::sync::OnceCell::new();
+
+                SEED.get_or_init(|| {
+                    let name = diem_crypto::_serde_name::trace_name::<#type_name #param>()
+                        .expect("The `CryptoHasher` macro only applies to structs and enums.").as_bytes();
+                    diem_crypto::hash::DefaultHasher::prefixed_hash(&name)
+                })
+
+            }
+
+            /// Return a new hasher pre-seeded by this type's seed
+            fn seeded_hasher() -> DefaultHasher;
+
+            fn hash(&self) -> diem_crypto::hash::HashValue {
+                use diem_crypto::hash::CryptoHasher;
+
+                let mut state = Self::seeded_hasher();
+                bcs::serialize_into(&mut state, &self).expect(#error_msg);
+                state.finish()
+            }
+        }
+    );
+    out.into()
+}
+
 fn add_trait_bounds(mut generics: syn::Generics) -> syn::Generics {
     for param in generics.params.iter_mut() {
         if let syn::GenericParam::Type(type_param) = param {
