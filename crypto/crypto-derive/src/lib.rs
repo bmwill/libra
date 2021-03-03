@@ -447,14 +447,6 @@ pub fn crypto_hash_dispatch(input: TokenStream) -> TokenStream {
         ),
         Span::call_site(),
     );
-    let param = if ast.generics.params.is_empty() {
-        quote!()
-    } else {
-        let args = proc_macro2::TokenStream::from_iter(
-            std::iter::repeat(quote!(())).take(ast.generics.params.len()),
-        );
-        quote!(<#args>)
-    };
     let generics = add_trait_bounds(ast.generics);
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
     let out = quote!(
@@ -464,15 +456,19 @@ pub fn crypto_hash_dispatch(input: TokenStream) -> TokenStream {
                 static SEED: diem_crypto::_once_cell::sync::OnceCell<[u8; 32]> = diem_crypto::_once_cell::sync::OnceCell::new();
 
                 SEED.get_or_init(|| {
-                    let name = diem_crypto::_serde_name::trace_name::<#type_name #param>()
+                    let name = diem_crypto::_serde_name::trace_name::<#type_name #ty_generics>()
                         .expect("The `CryptoHasher` macro only applies to structs and enums.").as_bytes();
                     diem_crypto::hash::DefaultHasher::prefixed_hash(&name)
                 })
-
             }
 
             /// Return a new hasher pre-seeded by this type's seed
-            fn seeded_hasher() -> DefaultHasher;
+            fn seeded_hasher() -> DefaultHasher {
+                static SEEDED_HASHER: diem_crypto::_once_cell::sync::OnceCell<DefaultHasher> = diem_crypto::_once_cell::sync::OnceCell::new();
+                SEEDED_HASHER.get_or_init(|| {
+                    diem_crypto::hash::DefaultHasher::new_with_seed(Self::seed())
+                })
+            }
 
             fn hash(&self) -> diem_crypto::hash::HashValue {
                 use diem_crypto::hash::CryptoHasher;

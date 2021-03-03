@@ -503,6 +503,13 @@ impl DefaultHasher {
     }
 
     #[doc(hidden)]
+    pub fn new_with_seed(seed: &[u8; HashValue::LENGTH]) -> Self {
+        let mut state = Sha3::v256();
+        state.update(seed);
+        DefaultHasher { state }
+    }
+
+    #[doc(hidden)]
     pub fn update(&mut self, bytes: &[u8]) {
         self.state.update(bytes);
     }
