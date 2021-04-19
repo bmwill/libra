@@ -6,12 +6,12 @@ use diem_crypto::{
     multi_ed25519::{MultiEd25519PrivateKey, MultiEd25519PublicKey},
     test_utils::KeyPair,
     traits::*,
+    CryptoHash,
 };
-use diem_crypto_derive::{CryptoHasher, BCSCryptoHash};
 use rand::{prelude::ThreadRng, thread_rng};
 use serde::{Deserialize, Serialize};
 
-#[derive(CryptoHasher, BCSCryptoHash, Serialize, Deserialize)]
+#[derive(CryptoHash, Serialize, Deserialize)]
 struct TestTypedSemantics(String);
 
 fn main() {

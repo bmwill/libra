@@ -1,19 +1,18 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! Test file for the procedural macros CryptoHasher and BCSCryptoHash.
+//! Test file for the procedural macro CryptoHash
 
 use crate as diem_crypto;
 use crate::{
-    hash::{CryptoHash, CryptoHasher, DIEM_HASH_PREFIX},
-    HashValue,
+    hash::{DefaultHasher, DIEM_HASH_PREFIX},
+    CryptoHash, HashValue,
 };
-use diem_crypto_derive::{BCSCryptoHash, CryptoHasher};
 use serde::{Deserialize, Serialize};
 use tiny_keccak::{Hasher, Sha3};
 
 // The expected use case.
-#[derive(Serialize, Deserialize, CryptoHasher, BCSCryptoHash)]
+#[derive(Serialize, Deserialize, CryptoHash)]
 pub struct Foo {
     a: u64,
     b: u32,
@@ -23,7 +22,7 @@ pub struct Foo {
 pub struct Bar {}
 
 // Complex example with generics and serde-rename.
-#[derive(Serialize, Deserialize, CryptoHasher, BCSCryptoHash)]
+#[derive(Serialize, Deserialize, CryptoHash)]
 #[serde(rename = "Foo")]
 pub struct Baz<T> {
     a: T,
@@ -31,10 +30,16 @@ pub struct Baz<T> {
 }
 
 impl CryptoHash for Bar {
-    type Hasher = FooHasher;
+    fn seed() -> &'static [u8; 32] {
+        <Foo as CryptoHash>::seed()
+    }
+
+    fn seeded_hasher() -> DefaultHasher {
+        <Foo as CryptoHash>::seeded_hasher()
+    }
 
     fn hash(&self) -> HashValue {
-        let state = Self::Hasher::default();
+        let state = Self::seeded_hasher();
         state.finish()
     }
 }
@@ -94,15 +99,8 @@ fn prefixed_sha3(input: &[u8]) -> [u8; 32] {
 #[test]
 fn test_cryptohasher_salt_access() {
     // the salt for this simple struct is expected to be its name
-    assert_eq!(FooHasher::seed(), &prefixed_sha3(b"Foo"));
-    assert_eq!(<Foo as CryptoHash>::Hasher::seed(), &prefixed_sha3(b"Foo"));
-    assert_eq!(
-        <Baz<usize> as CryptoHash>::Hasher::seed(),
-        &prefixed_sha3(b"Foo")
-    );
-    assert_eq!(
-        <Baz<String> as CryptoHash>::Hasher::seed(),
-        &prefixed_sha3(b"Foo")
-    );
-    assert_eq!(<Bar as CryptoHash>::Hasher::seed(), &prefixed_sha3(b"Foo"));
+    assert_eq!(<Foo as CryptoHash>::seed(), &prefixed_sha3(b"Foo"));
+    assert_eq!(<Baz<usize> as CryptoHash>::seed(), &prefixed_sha3(b"Foo"));
+    assert_eq!(<Baz<String> as CryptoHash>::seed(), &prefixed_sha3(b"Foo"));
+    assert_eq!(<Bar as CryptoHash>::seed(), &prefixed_sha3(b"Foo"));
 }

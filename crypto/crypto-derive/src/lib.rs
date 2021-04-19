@@ -12,20 +12,10 @@
 //! - the derive macros for `diem_crypto::traits`, namely `ValidCryptoMaterial`, `PublicKey`, `PrivateKey`,
 //!   `VerifyingKey`, `SigningKey` and `Signature` are meant to be derived on simple unions of types
 //!   implementing these traits.
-//! - the derive macro for `diem_crypto::hash::CryptoHasher`, which defines
+//! - the derive macro for `diem_crypto::hash::CryptoHash`, which defines
 //!   the domain-separation hasher structures described in `diem_crypto::hash`
 //!   (look there for details). This derive macro has for sole difference that it
-//!   automatically picks a unique salt for you, using the Serde name. For a container `Foo`,
-//!   this is usually equivalent to:
-//!   ```ignore
-//!   define_hasher! {
-//!    (
-//!         FooHasher,
-//!         FOO_HASHER,
-//!         b"Foo"
-//!     )
-//!   }
-//!   ```
+//!   automatically picks a unique salt for you, using the Serde name.
 //!
 //! # Unions of Signing Traits, in detail
 //!
@@ -99,15 +89,12 @@
 
 extern crate proc_macro;
 
-mod hasher;
 mod unions;
 
-use hasher::camel_to_snake;
 use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::quote;
-use std::iter::FromIterator;
-use syn::{parse_macro_input, parse_quote, Data, DeriveInput, Ident};
+use syn::{parse_macro_input, parse_quote, Data, DeriveInput};
 use unions::*;
 
 #[proc_macro_derive(SilentDisplay)]
@@ -318,132 +305,21 @@ pub fn derive_enum_signature(input: TokenStream) -> TokenStream {
     }
 }
 
-// There is a unit test for this logic in the crypto crate, at
-// diem_crypto::unit_tests::cryptohasher — you may have to modify it if you
-// edit the below.
-#[proc_macro_derive(CryptoHasher)]
-pub fn hasher_dispatch(input: TokenStream) -> TokenStream {
-    let item = parse_macro_input!(input as DeriveInput);
-    let hasher_name = Ident::new(
-        &format!("{}Hasher", &item.ident.to_string()),
-        Span::call_site(),
-    );
-    let snake_name = camel_to_snake(&item.ident.to_string());
-    let static_seed_name = Ident::new(
-        &format!("{}_SEED", snake_name.to_uppercase()),
-        Span::call_site(),
-    );
-
-    let static_hasher_name = Ident::new(
-        &format!("{}_HASHER", snake_name.to_uppercase()),
-        Span::call_site(),
-    );
-    let type_name = &item.ident;
-    let param = if item.generics.params.is_empty() {
-        quote!()
-    } else {
-        let args = proc_macro2::TokenStream::from_iter(
-            std::iter::repeat(quote!(())).take(item.generics.params.len()),
-        );
-        quote!(<#args>)
-    };
-
-    let out = quote!(
-        /// Cryptographic hasher for an BCS-serializable #item
-        #[derive(Clone)]
-        pub struct #hasher_name(diem_crypto::hash::DefaultHasher);
-
-        static #static_seed_name: diem_crypto::_once_cell::sync::OnceCell<[u8; 32]> = diem_crypto::_once_cell::sync::OnceCell::new();
-
-        impl #hasher_name {
-            fn new() -> Self {
-                let name = diem_crypto::_serde_name::trace_name::<#type_name #param>()
-                    .expect("The `CryptoHasher` macro only applies to structs and enums");
-                #hasher_name(
-                    diem_crypto::hash::DefaultHasher::new(&name.as_bytes()))
-            }
-        }
-
-        static #static_hasher_name: diem_crypto::_once_cell::sync::Lazy<#hasher_name> =
-            diem_crypto::_once_cell::sync::Lazy::new(|| #hasher_name::new());
-
-
-        impl std::default::Default for #hasher_name
-        {
-            fn default() -> Self {
-                #static_hasher_name.clone()
-            }
-        }
-
-        impl diem_crypto::hash::CryptoHasher for #hasher_name {
-            fn seed() -> &'static [u8; 32] {
-                #static_seed_name.get_or_init(|| {
-                    let name = diem_crypto::_serde_name::trace_name::<#type_name #param>()
-                        .expect("The `CryptoHasher` macro only applies to structs and enums.").as_bytes();
-                    diem_crypto::hash::DefaultHasher::prefixed_hash(&name)
-                })
-            }
-
-            fn update(&mut self, bytes: &[u8]) {
-                self.0.update(bytes);
-            }
-
-            fn finish(self) -> diem_crypto::hash::HashValue {
-                self.0.finish()
-            }
-        }
-
-        impl std::io::Write for #hasher_name {
-            fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-                use diem_crypto::hash::CryptoHasher;
-
-                self.0.update(bytes);
-                Ok(bytes.len())
-            }
-            fn flush(&mut self) -> std::io::Result<()> {
-                Ok(())
-            }
-        }
-
-    );
-    out.into()
-}
-
-#[proc_macro_derive(BCSCryptoHash)]
-pub fn bcs_crypto_hash_dispatch(input: TokenStream) -> TokenStream {
-    let ast = parse_macro_input!(input as DeriveInput);
-    let name = &ast.ident;
-    let hasher_name = Ident::new(&format!("{}Hasher", &name.to_string()), Span::call_site());
-    let error_msg = syn::LitStr::new(
-        &format!("BCS serialization of {} should not fail", name.to_string()),
-        Span::call_site(),
-    );
-    let generics = add_trait_bounds(ast.generics);
-    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
-    let out = quote!(
-        impl #impl_generics diem_crypto::hash::CryptoHash for #name #ty_generics #where_clause {
-            type Hasher = #hasher_name;
-
-            fn hash(&self) -> diem_crypto::hash::HashValue {
-                use diem_crypto::hash::CryptoHasher;
-
-                let mut state = Self::Hasher::default();
-                bcs::serialize_into(&mut state, &self).expect(#error_msg);
-                state.finish()
-            }
-        }
-    );
-    out.into()
-}
-
 #[proc_macro_derive(CryptoHash)]
 pub fn crypto_hash_dispatch(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
     let type_name = &ast.ident;
+    let error_msg = syn::LitStr::new(
+        &format!(
+            "BCS serialization of {} should not fail",
+            type_name.to_string()
+        ),
+        Span::call_site(),
+    );
     let generics = add_trait_bounds(ast.generics);
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
     let out = quote!(
-        impl #impl_generics diem_crypto::hash::CryptoHash1 for #type_name #ty_generics #where_clause {
+        impl #impl_generics diem_crypto::hash::CryptoHash for #type_name #ty_generics #where_clause {
             /// the seed used to initialize hashing `Self` before the serialization bytes of the actual value
             fn seed() -> &'static [u8; 32] {
                 use diem_crypto::__private::OnceCell;
@@ -453,8 +329,8 @@ pub fn crypto_hash_dispatch(input: TokenStream) -> TokenStream {
                 static SEED: OnceCell<[u8; 32]> = OnceCell::new();
 
                 SEED.get_or_init(|| {
-                    let name = trace_name::<#type_name #ty_generics>()
-                        .expect("The `CryptoHasher` macro only applies to structs and enums.").as_bytes();
+                    let name = trace_name::<Self>()
+                        .expect("The `CryptoHash` macro only applies to structs and enums.").as_bytes();
                     DefaultHasher::prefixed_hash(&name)
                 })
             }
@@ -467,6 +343,12 @@ pub fn crypto_hash_dispatch(input: TokenStream) -> TokenStream {
                 static SEEDED_HASHER: OnceCell<DefaultHasher> = OnceCell::new();
                 SEEDED_HASHER.get_or_init(|| DefaultHasher::new_with_seed(Self::seed())).clone()
             }
+
+            fn hash(&self) -> diem_crypto::hash::HashValue {
+                let mut state = Self::seeded_hasher();
+                bcs::serialize_into(&mut state, &self).expect(#error_msg);
+                state.finish()
+             }
         }
     );
     out.into()
@@ -476,6 +358,9 @@ fn add_trait_bounds(mut generics: syn::Generics) -> syn::Generics {
     for param in generics.params.iter_mut() {
         if let syn::GenericParam::Type(type_param) = param {
             type_param.bounds.push(parse_quote!(Serialize));
+            type_param
+                .bounds
+                .push(parse_quote!(serde::de::DeserializeOwned));
         }
     }
     generics

@@ -25,14 +25,15 @@ mod unit_tests;
 mod tags;
 
 pub use self::traits::*;
-pub use diem_crypto_derive::CryptoHash;
-pub use hash::{CryptoHash1, HashValue};
+pub use hash::{CryptoHash, HashValue};
 
-// Reexport once_cell and serde_name for use in CryptoHasher Derive implementation.
-#[doc(hidden)]
-pub use once_cell as _once_cell;
-#[doc(hidden)]
-pub use serde_name as _serde_name;
+// use crate as diem_crypto;
+// #[derive(serde::Serialize, serde::Deserialize, CryptoHash)]
+// #[serde(rename = "Foo")]
+// pub struct Baz<T> {
+//     a: T,
+//     b: u32,
+// }
 
 #[doc(hidden)]
 pub mod __private {

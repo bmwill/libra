@@ -9,15 +9,15 @@
 //! # Examples
 //!
 //! ```
-//! use diem_crypto_derive::{CryptoHasher, BCSCryptoHash};
 //! use diem_crypto::{
+//!     CryptoHash,
 //!     ed25519::*,
 //!     traits::{Signature, SigningKey, Uniform},
 //! };
 //! use rand::{rngs::StdRng, SeedableRng};
 //! use serde::{Serialize, Deserialize};
 //!
-//! #[derive(Serialize, Deserialize, CryptoHasher, BCSCryptoHash)]
+//! #[derive(Serialize, Deserialize, CryptoHash)]
 //! pub struct TestCryptoDocTest(String);
 //! let message = TestCryptoDocTest("Test message".to_string());
 //!
@@ -31,10 +31,7 @@
 //! testing purposes. Production code should find an alternate means for secure key generation.
 #![allow(clippy::integer_arithmetic)]
 
-use crate::{
-    hash::{CryptoHash, CryptoHasher},
-    traits::*,
-};
+use crate::{traits::*, CryptoHash};
 use anyhow::{anyhow, Result};
 use core::convert::TryFrom;
 use diem_crypto_derive::{DeserializeKey, SerializeKey, SilentDebug, SilentDisplay};
@@ -235,7 +232,7 @@ impl SigningKey for Ed25519PrivateKey {
     type SignatureMaterial = Ed25519Signature;
 
     fn sign<T: CryptoHash + Serialize>(&self, message: &T) -> Ed25519Signature {
-        let mut bytes = <T::Hasher as CryptoHasher>::seed().to_vec();
+        let mut bytes = T::seed().to_vec();
         bcs::serialize_into(&mut bytes, &message)
             .map_err(|_| CryptoMaterialError::SerializationError)
             .expect("Serialization of signable material should not fail.");
@@ -419,7 +416,7 @@ impl Signature for Ed25519Signature {
     ) -> Result<()> {
         // Public keys should be validated to be safe against small subgroup attacks, etc.
         precondition!(has_tag!(public_key, ValidatedPublicKeyTag));
-        let mut bytes = <T::Hasher as CryptoHasher>::seed().to_vec();
+        let mut bytes = T::seed().to_vec();
         bcs::serialize_into(&mut bytes, &message)
             .map_err(|_| CryptoMaterialError::SerializationError)?;
         Self::verify_arbitrary_msg(self, &bytes, public_key)
@@ -455,7 +452,7 @@ impl Signature for Ed25519Signature {
         for (_, sig) in keys_and_signatures.iter() {
             Ed25519Signature::check_malleability(&sig.to_bytes())?
         }
-        let mut message_bytes = <T::Hasher as CryptoHasher>::seed().to_vec();
+        let mut message_bytes = T::seed().to_vec();
         bcs::serialize_into(&mut message_bytes, &message)
             .map_err(|_| CryptoMaterialError::SerializationError)?;
 

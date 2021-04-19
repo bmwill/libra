@@ -11,7 +11,7 @@ use crate::{
         Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature, ED25519_PRIVATE_KEY_LENGTH,
         ED25519_PUBLIC_KEY_LENGTH, ED25519_SIGNATURE_LENGTH,
     },
-    hash::{CryptoHash, CryptoHasher},
+    hash::CryptoHash,
     traits::*,
 };
 use anyhow::{anyhow, Result};
@@ -487,7 +487,7 @@ impl Signature for MultiEd25519Signature {
     ) -> Result<()> {
         // Public keys should be validated to be safe against small subgroup attacks, etc.
         precondition!(has_tag!(public_key, ValidatedPublicKeyTag));
-        let mut bytes = <T as CryptoHash>::Hasher::seed().to_vec();
+        let mut bytes = <T as CryptoHash>::seed().to_vec();
         bcs::serialize_into(&mut bytes, &message)
             .map_err(|_| CryptoMaterialError::SerializationError)?;
         Self::verify_arbitrary_msg(self, &bytes, public_key)

@@ -21,14 +21,9 @@
 //!    same input to the hash function and therefore the same hash. This
 //!    creates a collision.
 //!
-//! Regarding (1), this library makes it easy for Diem developers to create as
-//! many new "hashable" Rust types as needed so that each Rust type hashed and signed
-//! in Diem has a unique meaning, that is, unambiguously captures the intent of a signer.
-//!
-//! Regarding (2), this library provides the `CryptoHasher` abstraction to easily manage
-//! cryptographic seeds for hashing. Hashing seeds aim to ensure that
-//! the hashes of values of a given type `MyNewStruct` never collide with hashes of values
-//! from another type.
+//! This library makes it easy for Diem developers to create as many new "hashable" Rust types as
+//! needed so that each Rust type hashed and signed in Diem has a unique meaning, that is,
+//! unambiguously captures the intent of a signer.
 //!
 //! Finally, to prevent format ambiguity within a same type `MyNewStruct` and facilitate protocol
 //! specifications, we use [Binary Canonical Serialization (BCS)](https://docs.rs/bcs/)
@@ -39,70 +34,45 @@
 //! To obtain a `hash()` method for any new type `MyNewStruct`, it is (strongly) recommended to
 //! use the derive macros of `serde` and `diem_crypto_derive` as follows:
 //! ```
-//! use diem_crypto::hash::CryptoHash;
-//! use diem_crypto_derive::{CryptoHasher, BCSCryptoHash};
+//! use diem_crypto::CryptoHash;
 //! use serde::{Deserialize, Serialize};
-//! #[derive(Serialize, Deserialize, CryptoHasher, BCSCryptoHash)]
+//! #[derive(Serialize, Deserialize, CryptoHash)]
 //! struct MyNewStruct { /*...*/ }
 //!
 //! let value = MyNewStruct { /*...*/ };
 //! value.hash();
 //! ```
 //!
-//! Under the hood, this will generate a new implementation `MyNewStructHasher` for the trait
-//! `CryptoHasher` and implement the trait `CryptoHash` for `MyNewStruct` using BCS.
+//! Under the hood, this will implement the trait `CryptoHash` for using BCS.
 //!
-//! # Implementing New Hashers
+//! # Implementing CryptoHash
 //!
-//! The trait `CryptoHasher` captures the notion of a pre-seeded hash function, aka a "hasher".
+//! The trait `CryptoHash` captures the notion of a pre-seeded hash function, aka a "hasher".
 //! New implementations can be defined in two ways.
 //!
 //! ## Derive macro (recommended)
 //!
 //! For any new structure `MyNewStruct` that needs to be hashed, it is recommended to simply
-//! use the derive macro [`CryptoHasher`](https://doc.rust-lang.org/reference/procedural-macros.html).
+//! use the derive macro [`CryptoHash`](https://doc.rust-lang.org/reference/procedural-macros.html).
 //!
 //! ```
-//! use diem_crypto_derive::CryptoHasher;
-//! use serde::Deserialize;
-//! #[derive(Deserialize, CryptoHasher)]
+//! use diem_crypto_derive::CryptoHash;
+//! use serde::{Serialize, Deserialize};
+//! #[derive(Serialize, Deserialize, CryptoHash)]
 //! #[serde(rename = "OptionalCustomSerdeName")]
 //! struct MyNewStruct { /*...*/ }
 //! ```
 //!
-//! The macro `CryptoHasher` will define a hasher automatically called `MyNewStructHasher`, and derive a salt
-//! using the name of the type as seen by the Serde library. In the example above, this name
-//! was changed using the Serde parameter `rename`: the salt will be based on the value `OptionalCustomSerdeName`
-//! instead of the default name `MyNewStruct`.
-//!
-//! ## Customized hashers
-//!
-//! **IMPORTANT:** Do NOT use this for new code unless you know what you are doing.
-//!
-//! This library also provides a few customized hashers defined in the code as follows:
-//!
-//! ```
-//! # // To get around that there's no way to doc-test a non-exported macro:
-//! # macro_rules! define_hasher { ($e:expr) => () }
-//! define_hasher! { (MyNewDataHasher, MY_NEW_DATA_HASHER, MY_NEW_DATA_SEED, b"MyUniqueSaltString") }
-//! ```
-//!
-//! # Using a hasher directly
-//!
-//! **IMPORTANT:** Do NOT use this for new code unless you know what you are doing.
-//!
-//! ```
-//! use diem_crypto::hash::{CryptoHasher, TestOnlyHasher};
-//!
-//! let mut hasher = TestOnlyHasher::default();
-//! hasher.update("Test message".as_bytes());
-//! let hash_value = hasher.finish();
-//! ```
+//! The macro `CryptoHash` will derive a salt using the name of the type as seen by the Serde
+//! library. In the example above, this name was changed using the Serde parameter `rename`: the
+//! salt will be based on the value `OptionalCustomSerdeName` instead of the default name
+//! `MyNewStruct`.
+
 #![allow(clippy::integer_arithmetic)]
 use bytes::Bytes;
 use hex::FromHex;
 use mirai_annotations::*;
-use once_cell::sync::{Lazy, OnceCell};
+use once_cell::sync::Lazy;
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest_derive::Arbitrary;
 use rand::{rngs::OsRng, Rng};
@@ -114,6 +84,8 @@ use std::{
     str::FromStr,
 };
 use tiny_keccak::{Hasher, Sha3};
+
+pub use diem_crypto_derive::CryptoHash;
 
 /// A prefix used to begin the salt of every diem hashable structure. The salt
 /// consists in this global prefix, concatenated with the specified
@@ -436,20 +408,8 @@ impl<'a> std::iter::ExactSizeIterator for HashValueBitIterator<'a> {}
 /// A type that can be cryptographically hashed to produce a `HashValue`.
 ///
 /// In most cases, this trait should not be implemented manually but rather derived using
-/// the macros `serde::Serialize`, `CryptoHasher`, and `BCSCryptoHash`.
-pub trait CryptoHash {
-    /// The associated `Hasher` type which comes with a unique salt for this type.
-    type Hasher: CryptoHasher;
-
-    /// Hashes the object and produces a `HashValue`.
-    fn hash(&self) -> HashValue;
-}
-
-/// A type that can be cryptographically hashed to produce a `HashValue`.
-///
-/// In most cases, this trait should not be implemented manually but rather derived using
 /// the macros `serde::Serialize` and `CryptoHash`.
-pub trait CryptoHash1: serde::Serialize {
+pub trait CryptoHash {
     /// the seed used to initialize hashing `Self` before the serialization bytes of the actual value
     fn seed() -> &'static [u8; 32];
 
@@ -457,24 +417,7 @@ pub trait CryptoHash1: serde::Serialize {
     fn seeded_hasher() -> DefaultHasher;
 
     /// Hashes the object and produces a `HashValue`.
-    fn hash(&self) -> HashValue {
-        let mut state = Self::seeded_hasher();
-        bcs::serialize_into(&mut state, &self)
-            .expect("BCS serialization should not fail while hashing");
-        state.finish()
-    }
-}
-
-/// A trait for representing the state of a cryptographic hasher.
-pub trait CryptoHasher: Default + std::io::Write {
-    /// the seed used to initialize hashing `Self` before the serialization bytes of the actual value
-    fn seed() -> &'static [u8; 32];
-
-    /// Write bytes into the hasher.
-    fn update(&mut self, bytes: &[u8]);
-
-    /// Finish constructing the [`HashValue`].
-    fn finish(self) -> HashValue;
+    fn hash(&self) -> HashValue;
 }
 
 /// The default hasher underlying generated implementations of `CryptoHasher`.
@@ -543,104 +486,6 @@ impl fmt::Debug for DefaultHasher {
     }
 }
 
-macro_rules! define_hasher {
-    (
-        $(#[$attr:meta])*
-        ($hasher_type: ident, $hasher_name: ident, $seed_name: ident, $salt: expr)
-    ) => {
-
-        #[derive(Clone, Debug)]
-        $(#[$attr])*
-        pub struct $hasher_type(DefaultHasher);
-
-        impl $hasher_type {
-            fn new() -> Self {
-                $hasher_type(DefaultHasher::new($salt))
-            }
-        }
-
-        static $hasher_name: Lazy<$hasher_type> = Lazy::new(|| { $hasher_type::new() });
-        static $seed_name: OnceCell<[u8; 32]> = OnceCell::new();
-
-        impl Default for $hasher_type {
-            fn default() -> Self {
-                $hasher_name.clone()
-            }
-        }
-
-        impl CryptoHasher for $hasher_type {
-            fn seed() -> &'static [u8;32] {
-                $seed_name.get_or_init(|| {
-                    DefaultHasher::prefixed_hash($salt)
-                })
-            }
-
-            fn update(&mut self, bytes: &[u8]) {
-                self.0.update(bytes);
-            }
-
-            fn finish(self) -> HashValue {
-                self.0.finish()
-            }
-        }
-
-        impl std::io::Write for $hasher_type {
-            fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-                self.0.update(bytes);
-                Ok(bytes.len())
-            }
-            fn flush(&mut self) -> std::io::Result<()> {
-                Ok(())
-            }
-        }
-    };
-}
-
-define_hasher! {
-    /// The hasher used to compute the hash of an internal node in the transaction accumulator.
-    (
-        TransactionAccumulatorHasher,
-        TRANSACTION_ACCUMULATOR_HASHER,
-        TRANSACTION_ACCUMULATOR_SEED,
-        b"TransactionAccumulator"
-    )
-}
-
-define_hasher! {
-    /// The hasher used to compute the hash of an internal node in the event accumulator.
-    (
-        EventAccumulatorHasher,
-        EVENT_ACCUMULATOR_HASHER,
-        EVENT_ACCUMULATOR_SEED,
-        b"EventAccumulator"
-    )
-}
-
-define_hasher! {
-    /// The hasher used to compute the hash of an internal node in the Sparse Merkle Tree.
-    (
-        SparseMerkleInternalHasher,
-        SPARSE_MERKLE_INTERNAL_HASHER,
-        SPARSE_MERKLE_INTERNAL_SEED,
-        b"SparseMerkleInternal"
-    )
-}
-
-define_hasher! {
-    /// The hasher used to compute the hash of an internal node in the transaction accumulator.
-    (
-        VoteProposalHasher,
-        VOTE_PROPOSAL_HASHER,
-        VOTE_PROPOSAL_SEED,
-        b"VoteProposalHasher"
-    )
-}
-
-define_hasher! {
-    /// The hasher used only for testing. It doesn't have a salt.
-    (TestOnlyHasher, TEST_ONLY_HASHER, TEST_ONLY_SEED, b"")
-}
-
 fn create_literal_hash(word: &str) -> HashValue {
     let mut s = word.as_bytes().to_vec();
     assert!(s.len() <= HashValue::LENGTH);
@@ -688,7 +533,7 @@ pub trait TestOnlyHash {
 impl<T: ser::Serialize + ?Sized> TestOnlyHash for T {
     fn test_only_hash(&self) -> HashValue {
         let bytes = bcs::to_bytes(self).expect("serialize failed during hash.");
-        let mut hasher = TestOnlyHasher::default();
+        let mut hasher = DefaultHasher::new(b"");
         hasher.update(&bytes);
         hasher.finish()
     }

@@ -6,11 +6,11 @@ extern crate criterion;
 
 use criterion::Criterion;
 
-use diem_crypto_derive::{BCSCryptoHash, CryptoHasher};
+use diem_crypto::CryptoHash;
 use rand::{prelude::ThreadRng, thread_rng};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, CryptoHasher, BCSCryptoHash, Serialize, Deserialize)]
+#[derive(Debug, CryptoHash, Serialize, Deserialize)]
 pub struct TestDiemCrypto(pub String);
 
 use diem_crypto::{
