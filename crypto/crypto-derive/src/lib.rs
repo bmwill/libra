@@ -440,42 +440,32 @@ pub fn bcs_crypto_hash_dispatch(input: TokenStream) -> TokenStream {
 pub fn crypto_hash_dispatch(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
     let type_name = &ast.ident;
-    let error_msg = syn::LitStr::new(
-        &format!(
-            "BCS serialization of {} should not fail",
-            type_name.to_string()
-        ),
-        Span::call_site(),
-    );
     let generics = add_trait_bounds(ast.generics);
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
     let out = quote!(
         impl #impl_generics diem_crypto::hash::CryptoHash1 for #type_name #ty_generics #where_clause {
             /// the seed used to initialize hashing `Self` before the serialization bytes of the actual value
             fn seed() -> &'static [u8; 32] {
-                static SEED: diem_crypto::_once_cell::sync::OnceCell<[u8; 32]> = diem_crypto::_once_cell::sync::OnceCell::new();
+                use diem_crypto::__private::OnceCell;
+                use diem_crypto::__private::trace_name;
+                use diem_crypto::hash::DefaultHasher;
+
+                static SEED: OnceCell<[u8; 32]> = OnceCell::new();
 
                 SEED.get_or_init(|| {
-                    let name = diem_crypto::_serde_name::trace_name::<#type_name #ty_generics>()
+                    let name = trace_name::<#type_name #ty_generics>()
                         .expect("The `CryptoHasher` macro only applies to structs and enums.").as_bytes();
-                    diem_crypto::hash::DefaultHasher::prefixed_hash(&name)
+                    DefaultHasher::prefixed_hash(&name)
                 })
             }
 
             /// Return a new hasher pre-seeded by this type's seed
-            fn seeded_hasher() -> DefaultHasher {
-                static SEEDED_HASHER: diem_crypto::_once_cell::sync::OnceCell<DefaultHasher> = diem_crypto::_once_cell::sync::OnceCell::new();
-                SEEDED_HASHER.get_or_init(|| {
-                    diem_crypto::hash::DefaultHasher::new_with_seed(Self::seed())
-                })
-            }
+            fn seeded_hasher() -> diem_crypto::hash::DefaultHasher {
+                use diem_crypto::__private::OnceCell;
+                use diem_crypto::hash::DefaultHasher;
 
-            fn hash(&self) -> diem_crypto::hash::HashValue {
-                use diem_crypto::hash::CryptoHasher;
-
-                let mut state = Self::seeded_hasher();
-                bcs::serialize_into(&mut state, &self).expect(#error_msg);
-                state.finish()
+                static SEEDED_HASHER: OnceCell<DefaultHasher> = OnceCell::new();
+                SEEDED_HASHER.get_or_init(|| DefaultHasher::new_with_seed(Self::seed())).clone()
             }
         }
     );

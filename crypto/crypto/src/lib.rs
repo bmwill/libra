@@ -25,13 +25,20 @@ mod unit_tests;
 mod tags;
 
 pub use self::traits::*;
-pub use hash::HashValue;
+pub use diem_crypto_derive::CryptoHash;
+pub use hash::{CryptoHash1, HashValue};
 
 // Reexport once_cell and serde_name for use in CryptoHasher Derive implementation.
 #[doc(hidden)]
 pub use once_cell as _once_cell;
 #[doc(hidden)]
 pub use serde_name as _serde_name;
+
+#[doc(hidden)]
+pub mod __private {
+    pub use once_cell::sync::OnceCell;
+    pub use serde_name::trace_name;
+}
 
 // We use [formally verified arithmetic](https://crates.io/crates/fiat-crypto)
 // in maintained forks of the dalek suite of libraries ({curve, ed,
