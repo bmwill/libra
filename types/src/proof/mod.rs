@@ -15,14 +15,7 @@ use crate::{
     transaction::{TransactionInfo, Version},
 };
 use anyhow::{ensure, Result};
-use diem_crypto::{
-    hash::{
-        CryptoHash, CryptoHasher, EventAccumulatorHasher, SparseMerkleInternalHasher,
-        TestOnlyHasher, TransactionAccumulatorHasher,
-    },
-    HashValue,
-};
-use diem_crypto_derive::CryptoHasher;
+use diem_crypto::{hash::CryptoHash, HashValue};
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
@@ -68,7 +61,7 @@ pub struct MerkleTreeInternalNode<H> {
     hasher: PhantomData<H>,
 }
 
-impl<H: CryptoHasher> MerkleTreeInternalNode<H> {
+impl<H: CryptoHash> MerkleTreeInternalNode<H> {
     pub fn new(left_child: HashValue, right_child: HashValue) -> Self {
         Self {
             left_child,
@@ -78,11 +71,17 @@ impl<H: CryptoHasher> MerkleTreeInternalNode<H> {
     }
 }
 
-impl<H: CryptoHasher> CryptoHash for MerkleTreeInternalNode<H> {
-    type Hasher = H;
+impl<H: CryptoHash> CryptoHash for MerkleTreeInternalNode<H> {
+    fn seed() -> &'static [u8; 32] {
+        H::seed()
+    }
+
+    fn seeded_hasher() -> diem_crypto::hash::DefaultHasher {
+        H::seeded_hasher()
+    }
 
     fn hash(&self) -> HashValue {
-        let mut state = Self::Hasher::default();
+        let mut state = Self::seeded_hasher();
         state.update(self.left_child.as_ref());
         state.update(self.right_child.as_ref());
         state.finish()

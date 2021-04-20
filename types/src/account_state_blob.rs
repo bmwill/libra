@@ -10,11 +10,7 @@ use crate::{
     transaction::Version,
 };
 use anyhow::{anyhow, ensure, Error, Result};
-use diem_crypto::{
-    hash::{CryptoHash, CryptoHasher},
-    HashValue,
-};
-use diem_crypto_derive::CryptoHasher;
+use diem_crypto::{CryptoHash, HashValue};
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest::{arbitrary::Arbitrary, prelude::*};
 #[cfg(any(test, feature = "fuzzing"))]
@@ -22,7 +18,7 @@ use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
 use std::{convert::TryFrom, fmt};
 
-#[derive(Clone, Eq, PartialEq, Serialize, Deserialize, CryptoHasher)]
+#[derive(Clone, Eq, PartialEq, Serialize, Deserialize, CryptoHash)]
 pub struct AccountStateBlob {
     blob: Vec<u8>,
 }
@@ -111,10 +107,30 @@ impl TryFrom<&AccountStateBlob> for AccountResource {
 }
 
 impl CryptoHash for AccountStateBlob {
-    type Hasher = AccountStateBlobHasher;
+    fn seed() -> &'static [u8; 32] {
+        use diem_crypto::{
+            __private::{trace_name, OnceCell},
+            hash::DefaultHasher,
+        };
+        static SEED: OnceCell<[u8; 32]> = OnceCell::new();
+        SEED.get_or_init(|| {
+            let name = trace_name::<Self>()
+                .expect("The `CryptoHash` macro only applies to structs and enums.")
+                .as_bytes();
+            DefaultHasher::prefixed_hash(&name)
+        })
+    }
+
+    fn seeded_hasher() -> diem_crypto::hash::DefaultHasher {
+        use diem_crypto::{__private::OnceCell, hash::DefaultHasher};
+        static SEEDED_HASHER: OnceCell<DefaultHasher> = OnceCell::new();
+        SEEDED_HASHER
+            .get_or_init(|| DefaultHasher::new_with_seed(Self::seed()))
+            .clone()
+    }
 
     fn hash(&self) -> HashValue {
-        let mut hasher = Self::Hasher::default();
+        let mut hasher = Self::seeded_hasher();
         hasher.update(&self.blob);
         hasher.finish()
     }
@@ -191,7 +207,7 @@ mod tests {
     use proptest::collection::vec;
 
     fn hash_blob(blob: &[u8]) -> HashValue {
-        let mut hasher = AccountStateBlobHasher::default();
+        let mut hasher = AccountStateBlob::seeded_hasher();
         hasher.update(blob);
         hasher.finish()
     }

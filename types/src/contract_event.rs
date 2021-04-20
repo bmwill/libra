@@ -14,8 +14,7 @@ use crate::{
     transaction::Version,
 };
 use anyhow::{ensure, Error, Result};
-use diem_crypto::hash::CryptoHash;
-use diem_crypto_derive::{BCSCryptoHash, CryptoHasher};
+use diem_crypto::CryptoHash;
 use move_core_types::{language_storage::TypeTag, move_resource::MoveResource};
 
 #[cfg(any(test, feature = "fuzzing"))]
@@ -24,7 +23,7 @@ use serde::{Deserialize, Serialize};
 use std::{convert::TryFrom, ops::Deref};
 
 /// Support versioning of the data structure.
-#[derive(Hash, Clone, Eq, PartialEq, Serialize, Deserialize, CryptoHasher, BCSCryptoHash)]
+#[derive(Hash, Clone, Eq, PartialEq, Serialize, Deserialize, CryptoHash)]
 pub enum ContractEvent {
     V0(ContractEventV0),
 }
@@ -58,7 +57,7 @@ impl Deref for ContractEvent {
 }
 
 /// Entry produced via a call to the `emit_event` builtin.
-#[derive(Hash, Clone, Eq, PartialEq, Serialize, Deserialize, CryptoHasher)]
+#[derive(Hash, Clone, Eq, PartialEq, Serialize, Deserialize, CryptoHash)]
 pub struct ContractEventV0 {
     /// The unique key that the event was emitted to
     key: EventKey,

@@ -17,7 +17,7 @@ use super::MerkleTreeInternalNode;
 use crate::proof::definition::{LeafCount, MAX_ACCUMULATOR_LEAVES};
 use anyhow::{ensure, format_err, Result};
 use diem_crypto::{
-    hash::{CryptoHash, CryptoHasher, ACCUMULATOR_PLACEHOLDER_HASH},
+    hash::{CryptoHash, ACCUMULATOR_PLACEHOLDER_HASH},
     HashValue,
 };
 use std::marker::PhantomData;

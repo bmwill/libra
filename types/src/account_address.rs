@@ -1,11 +1,7 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 use crate::transaction::authenticator::AuthenticationKey;
-use diem_crypto::{
-    ed25519::Ed25519PublicKey,
-    hash::{CryptoHasher, HashValue},
-    x25519,
-};
+use diem_crypto::{ed25519::Ed25519PublicKey, x25519, CryptoHash, HashValue};
 
 pub use move_core_types::account_address::AccountAddress;
 
@@ -26,14 +22,10 @@ pub fn from_identity_public_key(identity_public_key: x25519::PublicKey) -> Accou
     AccountAddress::new(array)
 }
 
-// Define the Hasher used for hashing AccountAddress types. In order to properly use the
-// CryptoHasher derive macro we need to have this in its own module so that it doesn't conflict
-// with the imported `AccountAddress` from move-core-types. It needs to have the same name since
-// the hash salt is calculated using the name of the type.
-mod hasher {
-    #[derive(serde::Deserialize, diem_crypto_derive::CryptoHasher)]
-    struct AccountAddress;
-}
+// Define the CryptoHash impl used for hashing AccountAddress types.
+#[derive(serde::Serialize, serde::Deserialize, diem_crypto_derive::CryptoHash)]
+#[serde(rename = "AccountAddress")]
+struct AccountAddressWrapper(move_core_types::account_address::AccountAddress);
 
 pub trait HashAccountAddress {
     fn hash(&self) -> HashValue;
@@ -41,9 +33,7 @@ pub trait HashAccountAddress {
 
 impl HashAccountAddress for AccountAddress {
     fn hash(&self) -> HashValue {
-        let mut state = hasher::AccountAddressHasher::default();
-        state.update(self.as_ref());
-        state.finish()
+        AccountAddressWrapper(*self).hash()
     }
 }
 
