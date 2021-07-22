@@ -698,7 +698,7 @@ jobs:
       - name: split tests
         run: |
           cd /opt/git/diem/
-          cargo x test --package smoke-test -- --list | \
+          echo "compatibility::simple-validator-upgrade" | \
             grep "::" | sed 's/: .*$//' > e2e_tests
           echo -e "Found $(wc -l e2e_tests) tests."
           # Splits the e2e test via round robin in to ${runners} number of files with single digit extensions.
