@@ -15,6 +15,8 @@ use std::{
 use tokio::runtime::Runtime;
 
 fn main() -> Result<()> {
+    ::diem_logger::Logger::init_for_testing();
+
     let tests = ForgeConfig::default()
         .with_initial_validator_count(NonZeroUsize::new(4).unwrap())
         .with_initial_version(InitialVersion::Oldest)
@@ -122,6 +124,8 @@ impl NetworkTest for SimpleValidatorUpgrade {
         println!("upgrading rest of first batch");
         batch_update(ctx, &first_batch, &new_version)?;
         generate_traffic(ctx, &first_batch)?;
+
+        ctx.swarm().fork_check()?;
 
         // Update the second batch
         println!("upgrading second batch");
